@@ -51,3 +51,6 @@ pytest
 hf_transfer
 beaker-py
 sentence-transformers
+prometheus_eval
+fschat
+anthropic

@@ -34,6 +34,7 @@ def main(args):
             else:
                 test_data.append({
                     "id": example["id"],
+                    "messages":example["messages"],
                     "question": example["messages"][0]["content"],
                     "answer": example["messages"][1]["content"]
                 })
@@ -97,14 +98,7 @@ def main(args):
                 do_sample=False,
             )
     else:
-        instances = [{"id": prompt, "prompt": prompt} for _, prompt in enumerate(prompts)]
-        results = query_openai_chat_model(
-            engine=args.openai_engine,
-            instances=instances,
-            batch_size=args.eval_batch_size if args.eval_batch_size else 10,
-            output_path=os.path.join(args.save_dir, f"openai_results.jsonl"),
-        )
-        outputs = [result["output"] for result in results]
+        pass
 
     predictions = []
     for output in outputs:
@@ -126,13 +120,14 @@ def main(args):
     else:
         predictions = [{
             "id": example["id"],
+            "messages":example["messages"],
             "question": example["question"],
             "answer": example["answer"],
             "model_output": output,
             "prediction": pred
         } for example, output, pred in zip(test_data, outputs, predictions)]
 
-    with open(args.save_dir, "w") as fout:
+    with open(args.save_path, "w") as fout:
         for prediction in predictions:
             fout.write(json.dumps(prediction) + "\n") 
     

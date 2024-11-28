@@ -6,10 +6,9 @@ TOTAL_BATCH_SIZE=32
 GRADIENT_ACC_STEPS=$(($TOTAL_BATCH_SIZE/$NUM_GPUS/$BATCH_SIZE_PER_GPU))
 echo "Training model using $NUM_GPUS GPUs, $BATCH_SIZE_PER_GPU batch size per GPU, $GRADIENT_ACC_STEPS gradient accumulation steps"
 
-
-MODEL_PATH=base_model
-train_file=data/dpo/iterate_0.jsonl  # retrieval_result data
-OUTPUT_PATH=ckpts/dpo/iterate_1   
+MODEL_PATH=ckpts/Mistral-7B-v0.3 # your base_model path
+train_file=data/retrieval/error_case_tag_retrieval_tag_similarity_1.jsonl  # retrieval_result data
+OUTPUT_PATH=ckpts/dpo/mistral/iterate_1   
 MERGE_OUTPUT_PATH=$OUTPUT_PATH-merge
 
 if [ ! -d $OUTPUT_PATH ];then

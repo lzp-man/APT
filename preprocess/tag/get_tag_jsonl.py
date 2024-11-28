@@ -7,16 +7,17 @@ import argparse
 from tqdm import tqdm
 parser = argparse.ArgumentParser()
 parser.add_argument("--filename")
-parser.add_argument("--save_dir")
+parser.add_argument("--save_path")
+parser.add_argument("--model_path")
 args=parser.parse_args()
 filename=args.filename
-save_dir=args.save_dir
+save_path=args.save_path
 
 model_id = "qwen-1p8b-tagger"
-model_path = "instagger_qwen1_8B" # your tag model path
+model_path = args.model_path # your tag model path
 
 # Load model with vLLM
-model = LLM(model=model_path, trust_remote_code=True)
+model = LLM(model=model_path, trust_remote_code=True,max_model_len=2048)
 # Setting greedy decoding with temperature=0
 sampling_params = SamplingParams(temperature=0, max_tokens=512)
 
@@ -94,12 +95,12 @@ with open(filename, 'r', encoding='utf-8') as file:
                 data.append(example)
         if tmp_len==buffer:
             tmp_len=0
-            with open(save_dir, "a",encoding='utf-8') as fout:
+            with open(save_path, "a",encoding='utf-8') as fout:
                 for sample in data:
                     fout.write(json.dumps(sample,ensure_ascii=False) + "\n")
             data=[]
 
 
-with open(save_dir, "a",encoding='utf-8') as fout:
+with open(save_path, "a",encoding='utf-8') as fout:
     for sample in data:
         fout.write(json.dumps(sample,ensure_ascii=False) + "\n")

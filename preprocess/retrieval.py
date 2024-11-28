@@ -14,8 +14,7 @@ def parse_args():
 
     parser = argparse.ArgumentParser(description="")
 
-    parser.add_argument('--error_data_input', type=str, required=True, help='error_data_input，formate is dpo type')
-    parser.add_argument('--whole_train_tag_input', type=str, required=True, help='whole train data with tag')
+    parser.add_argument('--error_data_input', type=str, required=True, help='error_data_input，formate is sft type')
     parser.add_argument('--data_pool_input', type=str, required=True, help='retrieval data pool, sft type')
     parser.add_argument('--data_pool_embed_input', type=str, help='retrieval data pool embedding')
     parser.add_argument('--output', type=str, required=True, help='output dir')
@@ -81,17 +80,6 @@ def dedup_data(all_data):
     filtered_data = list(unique_prompts.values())
     return filtered_data
 
-def add_tag_unique(whole_data,datas):
-    whole_data_index = {item['id']: item for item in whole_data}
-    for idx,item in enumerate(datas):
-        item["unique_id"] = idx
-        if item['prompt_id'] in whole_data_index:
-
-            whole_data_item = whole_data_index[item['prompt_id']]
-            if 'tag' in whole_data_item: 
-                item['tag'] = whole_data_item['tag']
-    return datas
-
 def extrac_tag(error_data):
 
     new_tag_index = {}
@@ -120,7 +108,7 @@ def retrieval_knn(error_data_embed,error_data,data_pool_embed,data_pool,retrieva
     similarities = cosine_similarity(data_pool_embed, cluster_centers)
 
 
-    error_ids = {d['prompt_id'] for d in error_data}
+    error_ids = {d['id'] for d in error_data}
 
     all_retrieval_data = []
 
@@ -156,7 +144,7 @@ def retrieval_similarity(error_data_embed,error_data,data_pool_embed,data_pool,r
 
     sorted_indices = np.argsort(similarity_scores)[::-1]
 
-    error_ids = {d['prompt_id'] for d in error_data}
+    error_ids = {d['id'] for d in error_data}
 
     filtered_indices = [idx for idx in sorted_indices if data_pool[idx]['id'] not in error_ids]
 
@@ -171,36 +159,7 @@ def retrieval_similarity(error_data_embed,error_data,data_pool_embed,data_pool,r
     return all_retrieval_data
 
 
-def retrieval_K_similarity(error_data_embed, error_data, data_pool_embed, data_pool, retrieval_scales):
-    all_retrieval_data = [[] for _ in range(len(retrieval_scales))]
-    
-    error_ids = {d['prompt_id'] for d in error_data}
-    
-    similarity_matrix = np.empty((len(error_data_embed), len(data_pool_embed)))
-    
-    batch_size = 100  
-    for start_idx in tqdm(range(0, len(error_data_embed), batch_size), desc="Calculating Cosine Similarity"):
-        end_idx = min(start_idx + batch_size, len(error_data_embed))
-        similarity_matrix[start_idx:end_idx] = cosine_similarity(error_data_embed[start_idx:end_idx], data_pool_embed)
-    
-    for i, similarity_scores in enumerate(tqdm(similarity_matrix, desc="Processing Data")):
-        sorted_indices = np.argsort(similarity_scores)[::-1]
-        
-        filtered_indices = [idx for idx in sorted_indices if data_pool[idx]['id'] not in error_ids]
-        
-        for j, retrieval_scale in enumerate(retrieval_scales):
-            selected_general_data = [data_pool[idx] for idx in filtered_indices[:retrieval_scale]]
-            all_retrieval_data[j].extend(selected_general_data)
-    
-    print("Finished sorting data by K-similarity")
-    
-
-    for i in range(len(all_retrieval_data)):
-        all_retrieval_data[i] = dedup_data(all_retrieval_data[i])
-    
-    return all_retrieval_data
-
-def retrieval_tag(whole_train_tag,error_data_embed, error_data, data_pool_embed, data_pool, retrieval_scales):
+def retrieval_tag(error_data_embed, error_data, data_pool_embed, data_pool, retrieval_scales):
 
     for idx,data in enumerate(data_pool):
         data['unique_id'] = idx
@@ -213,7 +172,8 @@ def retrieval_tag(whole_train_tag,error_data_embed, error_data, data_pool_embed,
     
     print("finish making tag index")
 
-    error_data = add_tag_unique(whole_train_tag,error_data)
+    for idx,item in enumerate(error_data):
+        item['unique_id'] = idx
 
     error_tag_index = extrac_tag(error_data)
 
@@ -279,23 +239,17 @@ def main():
 
     error_data = load_data_mode2(args.error_data_input)
     data_pool = load_data_mode2(args.data_pool_input)
-    whole_train_tag = load_data_mode2(args.whole_train_tag_input)
     print("finished load data")
 
 
     if args.retrieval_domain:
-        origin_error_data = add_tag_unique(whole_train_tag,error_data)
-        _ = extrac_tag(origin_error_data)
-        print("now only retrieval domain data")
-        print(f"befor fillter {len(error_data)}")
-
-        filtered_errordata = [item for item in error_data if any(keyword in item['prompt_id'] 
+        origin_error_data = error_data.copy()
+        filtered_error_data = [item for item in error_data if any(keyword in item['id'] 
                     for keyword in ['gsm8k', 'code_alpaca', 'dolly'])]
-        error_data = filtered_errordata.copy()
+        error_data = filtered_error_data.copy()
         print(f"after fillter {len(error_data)}")
         
-        
-
+    
     error_data_embed = embedding_convert(error_data,model,args.encode_type)
     
         
@@ -315,16 +269,9 @@ def main():
                             data_pool_embed,data_pool,
                             retrieval_scales)
 
-        
-    elif args.retrieval_type == "K_similarity":
-
-        retrieval_datas = retrieval_K_similarity(error_data_embed,error_data,
-                            data_pool_embed,data_pool,
-                            retrieval_scales)
-
     elif args.retrieval_type == "tag_similarity":
 
-        retrieval_datas = retrieval_tag(whole_train_tag,error_data_embed,error_data,
+        retrieval_datas = retrieval_tag(error_data_embed,error_data,
                             data_pool_embed,data_pool,
                             retrieval_scales)
 
@@ -353,7 +300,7 @@ def main():
                     {"role":"assistant","content":retrieval_data[rand_num]["messages"][1]["content"]}
                 ],
                 "messages":[
-                    {"role":"user","content":r_data["messages"][0]["content"],},
+                    {"role":"user","content":r_data["messages"][0]["content"]},
                     {"role":"assistant","content":r_data["messages"][1]["content"]}
                 ],
                 "score_chosen":5.0,
@@ -361,9 +308,41 @@ def main():
                 "tag":r_data["tag"],
             })
 
+
         if args.retrieval_domain:
-            new_retrieval_data += origin_error_data
+            new_error_data = []
+            for i,item in tqdm(enumerate(origin_error_data)):
+                new_error_data.append({
+                    "prompt_id": item["id"],
+                    "prompt": item["messages"][0]["content"],
+                    "chosen":item["messages"],
+                    "rejected":[
+                        {"role":"user","content":item["messages"][0]["content"]},
+                        {"role":"assistant","content":item["prediction"]}
+                    ],
+                    "messages":item["messages"],
+                    "score_chosen":5.0,
+                    "score_rejected":item["score"],
+                    "tag":item["tag"],
+                })
+
+            new_retrieval_data += new_error_data
         else:
+            new_error_data = []
+            for i,item in tqdm(enumerate(error_data)):
+                new_error_data.append({
+                    "prompt_id": item["id"],
+                    "prompt": item["messages"][0]["content"],
+                    "chosen":item["messages"],
+                    "rejected":[
+                        {"role":"user","content":item["messages"][0]["content"]},
+                        {"role":"assistant","content":item["prediction"]}
+                    ],
+                    "messages":item["messages"],
+                    "score_chosen":5.0,
+                    "score_rejected":item["score"],
+                    "tag":item["tag"],
+                })
             new_retrieval_data += error_data
 
         for data in new_retrieval_data:

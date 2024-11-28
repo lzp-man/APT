@@ -9,7 +9,7 @@ pip install -r requirements.txt
 # Data Preparation
 We provide several scripts for reproducing the whole iteration of our paper method.
 ## Bad Case Generation and Score
-Before you start, please make sure you have prepared the enviroment and data. The data should be formatting as follows:
+Before getting started, ensure that the environment is set up and the SFT data is prepared. The SFT-type data should be formatted as follows:
 ```
 {
     "id": "unique_id",
@@ -27,7 +27,8 @@ Before you start, please make sure you have prepared the enviroment and data. Th
 bash myscript/process/generate_and_score.sh
 ```
 
-After executing this script, you will obtain a collection of low-scoring error data.
+After executing this script, you will obtain a collection of low-scoring error data. The default name is `error_case.jsonl`.
+
 
 # Retrieval step
 Before using the Tag-based Similarity retrieval method, you need to label the retrieval pool data and all domains to be tested using the tag model.

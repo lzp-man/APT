@@ -6,21 +6,24 @@ from prometheus_eval.vllm import VLLM
 from prometheus_eval import PrometheusEval
 from prometheus_eval.prompts import ABSOLUTE_PROMPT, SCORE_RUBRIC_TEMPLATE
 
-model = VLLM(model="prometheus-7b-v2.0")
-judge = PrometheusEval(model=model, absolute_grade_template=ABSOLUTE_PROMPT)
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--part_name", type=str, default="")
+parser.add_argument("--model_path",type=str,default="prometheus-7b-v2.0")
 parser.add_argument("--input_dir", type=str, default="./results", help="input dir")
 parser.add_argument("--output_dir", type=str, default="./results", help="output dir")
 parser.add_argument("--dpo_type_data", action="store_true", help="dpo type data process")
 args = parser.parse_args()
+
+model = VLLM(model=args.model_path)
+judge = PrometheusEval(model=model, absolute_grade_template=ABSOLUTE_PROMPT)
 
 part = args.part_name
 
 print("Loading data...")
 test_data = []
 ids = []
+messages = []
 instructions = []
 responses = []
 reference_answers = []
@@ -41,11 +44,13 @@ with open(input_file, 'r', encoding='utf-8') as fin:
         example = json.loads(line)
         if args.dpo_type_data:
             ids.append(example["prompt_id"])
+            messages.append(example["messages"])
             instructions.append(example["prompt"])
             responses.append(example["rejected"][1]["content"])
             reference_answers.append(example["chosen"][1]["content"])
         else:
             ids.append(example["id"])
+            messages.append(example["messages"])
             instructions.append(example["question"])
             responses.append(example["prediction"])
             reference_answers.append(example["answer"])
@@ -63,6 +68,7 @@ for i in range(len(instructions)):
     test_data.append(
         {
             "id": ids[i],
+            "messages":messages[i],
             "question": instructions[i],
             "answer": reference_answers[i],
             "prediction": responses[i],

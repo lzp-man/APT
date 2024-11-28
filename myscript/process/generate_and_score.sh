@@ -1,16 +1,18 @@
 #!/bin/bash
 
 
-name=your_input_file_name
-dir_path=input_file_dirf_path
-ckpt=model_for_generation_and_score
-
+name=test
+dir_path=data
+ckpt=ckpts/Llama-2-7b-hf
+judge_model=~/prometheus-7b-v2.0 # you judge model path
 split_num=4
 gpu_start=$1
 offset=$((gpu_start - 1))
 
-tmp_output_dir=tmp_file_save_path
-output_dir=final_result
+tmp_output_dir=tmp
+output_dir=data
+mkdir $output_dir
+mkdir $tmp_output_dir
 
 python preprocess/split_jsonl.py \
     --file_path ${dir_path}/${name}.jsonl \
@@ -36,6 +38,7 @@ wait
 for i in $(seq 1 $split_num); do
     CUDA_VISIBLE_DEVICES=$(($i + $offset)) python preprocess/score.py \
         --part_name part${i} \
+        --model_path $judge_model\
         --input_dir $tmp_output_dir \
         --output_dir $tmp_output_dir &
 done
@@ -49,6 +52,7 @@ python preprocess/merge_jsonl.py \
     --num_splits $split_num
 
 
-python preprocess/selector.py --name $tmp_output_dir/${name}_all_score.jsonl --save-dpo $output_dir
 
-# you will get error_case.jsonl file
+python preprocess/selector.py --file_path $tmp_output_dir/${name}_all_score.jsonl --save-dpo $output_dir
+
+rm -rf $tmp_output_dir
