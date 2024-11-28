@@ -1,5 +1,5 @@
-data_pool_input=/mnt/nvme1/lzp/work_dir/data/dpo/retrival_data/combined_data_tag_filtered.jsonl  # data should with tag
-data_pool_embed_input=/mnt/nvme1/lzp/work_dir/data/dpo/retrival_data/combined_data_filtered.npy # embed data should have same size with data_pool_input
+data_pool_input=your_data_pool.jsonl # data should with tag
+data_pool_embed_input=you_data_pool.npy # embed data should have same size with data_pool_input
 whole_train_tag_input=data/error_case_tag.jsonl   # data should with tag
 
 create_output_dir() {

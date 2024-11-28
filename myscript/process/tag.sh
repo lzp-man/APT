@@ -2,7 +2,7 @@
 name=error_case # get in generate_and_score.sh
 num_gpu=4
 input_file=data/${name}.jsonl
-tag_model=/mnt/nvme1/lzp/work_dir/models/instagger_qwen1_8B # your tag model path
+tag_model=~/instagger_qwen1_8B # your tag model path
 output_dir=data
 
 rm -rf $output_dir/tmp
