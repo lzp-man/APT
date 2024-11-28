@@ -54,3 +54,7 @@ After completing the retrieval step, you have obtained the preference data requi
 bash myscript/train/capt_llama.sh
 bash myscript/train/capt_mistral.sh
 ```
+
+# Acknowledgement
+This project is based on modifications of the https://github.com/allenai/open-instruct.git open-source code.Thank you to the original authors for their work!
+
