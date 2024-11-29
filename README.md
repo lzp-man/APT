@@ -55,6 +55,16 @@ bash myscript/train/capt_llama.sh
 bash myscript/train/capt_mistral.sh
 ```
 
+# Evaluation
+To evaluate the performance of the trained models, you can use the following command:
+```
+# eval gsm8k
+bash myscript/eval/eval_gsm8k.sh
+bash myscript/eval/eval_code.sh
+bash myscript/eval/eval_dolly.sh
+```
+Note: For the evaluation of Dolly, we used Alpaca-Eval to assess its instruction-following capability.
+
 # Acknowledgement
 This project is based on modifications of the https://github.com/allenai/open-instruct.git open-source code.Thank you to the original authors for their work!
 

@@ -54,3 +54,4 @@ sentence-transformers
 prometheus_eval
 fschat
 anthropic
+alpaca-eval
