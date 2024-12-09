@@ -82,7 +82,7 @@ def dpo_loss_w_reg(policy_chosen_logps: torch.FloatTensor,
     else:
         regular_term = alpha * policy_chosen_logps
 
-    # print(f"对比：前面项{abs(beta * logits)},后面项{abs(regular_term)}")
+
     losses = -F.logsigmoid(beta * logits) - regular_term
     chosen_rewards = beta * (policy_chosen_logps - reference_chosen_logps).detach()
     rejected_rewards = beta * (policy_rejected_logps - reference_rejected_logps).detach()

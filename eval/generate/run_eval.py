@@ -159,13 +159,13 @@ if __name__ == "__main__":
     parser.add_argument(
         "--model_name_or_path", 
         type=str, 
-        default="/data/rj/open-instruct/ouput/7b_alpacagsminit_selectortrain_sft_bs32", 
+        default=None, 
         help="if specified, we will load the model to generate the predictions."
     )
     parser.add_argument(
         "--tokenizer_name_or_path", 
         type=str, 
-        default="/data/rj/open-instruct/data/processed/train_selector", 
+        default=None, 
         help="if specified, we will load the tokenizer from here."
     )
     parser.add_argument(

@@ -3,18 +3,15 @@ import os
 
 def merge_jsonl(merge_file_name,input_dir, output_path, num_splits):
 
-    # 确保输入目录存在
     if not os.path.exists(input_dir):
         print(f"cur dir not exist: {input_dir}")
         return
 
-    # 确保输出目录存在
     output_dir = os.path.dirname(output_path)
     os.makedirs(output_dir, exist_ok=True)
 
-    # 打开输出文件
     with open(output_path, 'w', encoding='utf-8') as outfile:
-        # 遍历每个部分文件
+
         for i in range(1, num_splits + 1):
             part_file = os.path.join(input_dir, f'{merge_file_name}_part{i}.jsonl')
             if os.path.exists(part_file):

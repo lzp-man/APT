@@ -700,12 +700,12 @@ if __name__ == "__main__":
                 output_dir=os.path.join(args.output_dir, "tulu_v1", "code_alpaca_subset"),
                 num_examples=None
             )
-            # convert_sharegpt_data(
-            #     data_dir=os.path.join(args.raw_data_dir, "sharegpt"),
-            #     output_dir=os.path.join(args.output_dir, "tulu_v1", "sharegpt_subset"),
-            #     data_file="sharegpt_html_cleaned_and_split_2048.json",
-            #     num_examples=None
-            # )
+            convert_sharegpt_data(
+                data_dir=os.path.join(args.raw_data_dir, "sharegpt"),
+                output_dir=os.path.join(args.output_dir, "tulu_v1", "sharegpt_subset"),
+                data_file="sharegpt_html_cleaned_and_split_2048.json",
+                num_examples=None
+            )
             # merge all the subsets
             print("Merging all the subsets to create tulu v1...")
             all_subsets = [f for f in os.listdir(os.path.join(args.output_dir, "tulu_v1")) if f.endswith("_subset")]
@@ -750,12 +750,12 @@ if __name__ == "__main__":
                 output_dir=os.path.join(args.output_dir, "tulu_v2", "code_alpaca_subset"), 
                 num_examples=None
             )
-            # convert_sharegpt_data(
-            #     data_dir=os.path.join(args.raw_data_dir, "sharegpt"), 
-            #     output_dir=os.path.join(args.output_dir, "tulu_v2", "sharegpt_subset"),
-            #     data_file="sharegpt_html_cleaned_and_split_4096.json",
-            #     num_examples=None
-            # )
+            convert_sharegpt_data(
+                data_dir=os.path.join(args.raw_data_dir, "sharegpt"), 
+                output_dir=os.path.join(args.output_dir, "tulu_v2", "sharegpt_subset"),
+                data_file="sharegpt_html_cleaned_and_split_4096.json",
+                num_examples=None
+            )
             convert_wizardlm_data(
                 data_dir=os.path.join(args.raw_data_dir, "wizardlm"), 
                 output_dir=os.path.join(args.output_dir, "tulu_v2", "wizardlm_subset"), 

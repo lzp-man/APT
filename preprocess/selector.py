@@ -15,9 +15,9 @@ def select_dpo_jsonl(file_path, save_path):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="选择符合条件的 JSONL 数据，并保存到指定路径")
-    parser.add_argument("--file_path", required=True, help="输入的 JSONL 文件路径")
-    parser.add_argument("--save-dpo", required=True, help="最终输出的 JSONL 文件路径")
+    parser = argparse.ArgumentParser(description="")
+    parser.add_argument("--file_path", required=True, help="input file path")
+    parser.add_argument("--save-dpo", required=True, help="output file dir")
     args = parser.parse_args()
 
     select_dpo_jsonl(args.file_path, args.save_dpo)

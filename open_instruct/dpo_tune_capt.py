@@ -750,7 +750,7 @@ def main():
         model, optimizer, train_dataloader, lr_scheduler
     )
     
-    # 添加 neftune：
+    # add neftune：
     if args.neftune_noise_alpha is not None:
         model,hook_handle = _activate_neftune(args,model,accelerator)
 

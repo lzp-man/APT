@@ -313,7 +313,6 @@ def encode_with_messages_format(example, tokenizer, max_seq_length):
                 messages_so_far = _concat_messages(messages[:message_idx+1])[0]
             message_end_idx = tokenizer(
                 messages_so_far,
-                # 这里进行修改
                 padding=True,
                 return_tensors='pt', 
                 max_length=max_seq_length, 

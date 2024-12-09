@@ -405,18 +405,6 @@ def prepare_deepspeed(accelerator, model):
 def main():
     args = parse_args()
 
-    # # 设置个默认值
-    # if args.seed is None:
-    #     args.seed = 42
-    # # 设置随机数种子
-    # random.seed(args.seed)
-
-    # torch.manual_seed(args.seed)
-    # if torch.cuda.is_available():
-    #     torch.cuda.manual_seed_all(args.seed)
-
-
-    # 把所有参数打印出来
     for arg in vars(args):
         print(f"{arg} = {getattr(args, arg)}")
 
@@ -770,8 +758,7 @@ def main():
                                 reference_chosen_logps, reference_rejected_logps = concatenated_forward(model, batch)
                         else:
                             reference_chosen_logps, reference_rejected_logps = concatenated_forward(reference_model, batch)
-                    # 增加的地方
-                    # 增加正则的损失
+
                     if args.use_reg_dpo_loss:
                         if args.use_sft_reg:
                             # print("use dpo loss with regular")
@@ -816,7 +803,7 @@ def main():
                 completed_steps += 1
                 if args.logging_steps and completed_steps % args.logging_steps == 0:
                     avg_loss = accelerator.gather(total_loss).mean().item() / args.gradient_accumulation_steps / args.logging_steps
-                    # 增加chosen_rewards, rejected_rewards的信息打印
+
                     avg_chosen_rewards = accelerator.gather(chosen_rewards).mean().item() if accelerator.num_processes > 1 else chosen_rewards.mean().item()
                     avg_rejected_rewards = accelerator.gather(rejected_rewards).mean().item() if accelerator.num_processes > 1 else rejected_rewards.mean().item()
     
