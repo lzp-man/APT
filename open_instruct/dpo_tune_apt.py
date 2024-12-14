@@ -32,16 +32,27 @@ from transformers import (
     GPTNeoXTokenizerFast,
     GPT2Tokenizer,
     OPTForCausalLM,
+    PreTrainedTokenizerFast,
     BitsAndBytesConfig,
 )
-from peft import LoraConfig, TaskType, get_peft_model, prepare_model_for_kbit_training
-from dpo_utils import dpo_loss,dpo_loss_w_reg, concatenated_forward,concatenated_forward_orpo,odds_ratio_loss, DataCollatorForSeq2SeqDPO
+from peft import LoraConfig, TaskType, get_peft_model, prepare_model_for_kbit_training,PeftModel
+from dpo_utils_apt import dpo_loss,dpo_loss_w_reg, concatenated_forward,concatenated_forward_orpo,odds_ratio_loss, DataCollatorForSeq2SeqDPO
+
+from packaging import version
+import importlib.metadata
 
 logger = get_logger(__name__)
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Finetune a transformers model on a causal language modeling task")
+    parser.add_argument(
+        "--neftune_noise_alpha",
+        type=float,
+        default=None,
+        help="The noise alpha parameter for NEFTune.",
+    )
+    
     parser.add_argument(
         "--dataset_name",
         type=str,
@@ -344,13 +355,13 @@ def encode_with_messages_format(example, tokenizer, max_seq_length):
     rejected_encoded = encode_messages(rejected_messages)
     # labels are useful for working out where the loss is valid.
     return {
-        'chosen_input_ids': chosen_encoded['input_ids'],
-        'chosen_labels': chosen_encoded['labels'],
-        'chosen_attention_mask': chosen_encoded['attention_mask'],
-        'rejected_input_ids': rejected_encoded['input_ids'],
-        'rejected_labels': rejected_encoded['labels'],
-        'rejected_attention_mask': rejected_encoded['attention_mask'],
-    }
+            'chosen_input_ids': chosen_encoded['input_ids'],
+            'chosen_labels': chosen_encoded['labels'],
+            'chosen_attention_mask': chosen_encoded['attention_mask'],
+            'rejected_input_ids': rejected_encoded['input_ids'],
+            'rejected_labels': rejected_encoded['labels'],
+            'rejected_attention_mask': rejected_encoded['attention_mask'],
+        }
 
 
 def save_with_accelerate(accelerator, model, tokenizer, output_dir, args):
@@ -400,11 +411,78 @@ def prepare_deepspeed(accelerator, model):
         model, *_ = deepspeed.initialize(model=model, config=config_kwargs)
         model.eval()
         return model
-        
+
+def _is_peft_model(model):
+    
+    classes_to_check = (PeftModel,)
+    # Here we also check if the model is an instance of `PeftMixedModel` introduced in peft>=0.7.0: https://github.com/huggingface/transformers/pull/28321
+    if version.parse(importlib.metadata.version("peft")) >= version.parse("0.7.0"):
+        from peft import PeftMixedModel
+
+        classes_to_check = (*classes_to_check, PeftMixedModel)
+    return isinstance(model, classes_to_check)
+
+def neftune_post_forward_hook(module, input, output):
+    """
+    Implements the NEFTune forward pass for the model using forward hooks. Note this works only for torch.nn.Embedding
+    layers. This method is slightly adapted from the original source code that can be found here:
+    https://github.com/neelsjain/NEFTune Simply add it to your model as follows:
+    ```python
+    model = ...
+    model.embed_tokens.neftune_noise_alpha = 0.1
+    model.embed_tokens.register_forward_hook(neftune_post_forward_hook)
+    ```
+    Args:
+        module (`torch.nn.Module`):
+            The embedding module where the hook is attached. Note that you need to set `module.neftune_noise_alpha` to
+            the desired noise alpha value.
+        input (`torch.Tensor`):
+            The input tensor to the model.
+        output (`torch.Tensor`):
+            The output tensor of the model (i.e. the embeddings).
+    """
+    if module.training:
+        dims = torch.tensor(output.size(1) * output.size(2))
+        mag_norm = module.neftune_noise_alpha / torch.sqrt(dims)
+        output = output + torch.zeros_like(output).uniform_(-mag_norm, mag_norm)
+    return output
+
+def _activate_neftune(args,model,accelerator):
+    """
+    Activates the NEFTune as presented in this code: https://github.com/neelsjain/NEFTune and paper:
+    https://arxiv.org/abs/2310.05914
+    """
+    unwrapped_model = accelerator.unwrap_model(model)  # Assuming no accelerator is used, adjust as needed.
+
+    if _is_peft_model(unwrapped_model):
+        embeddings = unwrapped_model.base_model.model.get_input_embeddings()
+    else:
+        embeddings = unwrapped_model.get_input_embeddings()
+
+    del unwrapped_model
+
+    embeddings.neftune_noise_alpha = args.neftune_noise_alpha
+    hook_handle = embeddings.register_forward_hook(neftune_post_forward_hook)
+    return model,hook_handle
+
+def _deactivate_neftune(model,accelerator,hook_handle):
+    """
+    Deactivates the neftune method. Make sure to call `_activate_neftune` first.
+    """
+    unwrapped_model = accelerator.unwrap_model(model)
+
+    if _is_peft_model(unwrapped_model):
+        embeddings = unwrapped_model.base_model.model.get_input_embeddings()
+    else:
+        embeddings = unwrapped_model.get_input_embeddings()
+
+    hook_handle.remove()
+    del embeddings.neftune_noise_alpha, unwrapped_model
 
 def main():
     args = parse_args()
 
+    # Print the arguments
     for arg in vars(args):
         print(f"{arg} = {getattr(args, arg)}")
 
@@ -472,13 +550,16 @@ def main():
 
     if args.tokenizer_name:
         tokenizer = AutoTokenizer.from_pretrained(args.tokenizer_name, use_fast=not args.use_slow_tokenizer)
+
     elif args.model_name_or_path:
         tokenizer = AutoTokenizer.from_pretrained(args.model_name_or_path, use_fast=not args.use_slow_tokenizer)
+
     else:
         raise ValueError(
             "You are instantiating a new tokenizer from scratch. This is not supported by this script."
             "You can do it from another script, save it, and load it from here, using --tokenizer_name."
         )
+    
     def load_model():
         if args.model_name_or_path:
             if args.use_qlora:
@@ -494,7 +575,7 @@ def main():
                     args.model_name_or_path,
                     from_tf=bool(".ckpt" in args.model_name_or_path),
                     config=config,
-                    load_in_4bit=True,
+                    # load_in_4bit=True,
                     quantization_config=bnb_config,
                     device_map=device_map,
                     torch_dtype=torch.bfloat16,
@@ -536,13 +617,21 @@ def main():
             "pad_token": "<pad>",
         })
         assert num_added_tokens in [0, 1], "LlamaTokenizer should only add one special token - the pad_token, or no tokens if pad token present."
+
+    elif isinstance(tokenizer, PreTrainedTokenizerFast):
+        eot = "<|eot_id|>"
+        eot_id = tokenizer.convert_tokens_to_ids(eot)
+        tokenizer.pad_token = eot
+        tokenizer.pad_token_id = eot_id
     elif isinstance(tokenizer, GPTNeoXTokenizerFast):
         num_added_tokens = tokenizer.add_special_tokens({
             "pad_token": "<pad>",
         })
         assert num_added_tokens == 1, "GPTNeoXTokenizer should only add one special token - the pad_token."
+
     elif isinstance(tokenizer, GPT2Tokenizer) and isinstance(model, OPTForCausalLM):
         num_added_tokens = tokenizer.add_special_tokens({'unk_token': '<unk>'})
+
 
     # We resize the embeddings only when necessary to avoid index errors. If you are creating a model from scratch
     # on a small vocab and want a smaller embedding size, remove this test.
@@ -551,6 +640,8 @@ def main():
         model.resize_token_embeddings(len(tokenizer))
         if not args.use_lora:
             reference_model.resize_token_embeddings(len(tokenizer))
+
+    
 
     if args.use_lora:
         if args.use_qlora:
@@ -567,6 +658,7 @@ def main():
         )
         model = get_peft_model(model, peft_config)
         model.print_trainable_parameters()
+
 
     # Preprocessing the datasets.
     if "prompt" in raw_datasets["train_prefs"].column_names and "completion" in raw_datasets["train_prefs"].column_names:
@@ -657,6 +749,12 @@ def main():
     model, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
         model, optimizer, train_dataloader, lr_scheduler
     )
+    
+    # add neftune：
+    if args.neftune_noise_alpha is not None:
+        model,hook_handle = _activate_neftune(args,model,accelerator)
+
+    
     if not args.use_lora:
         reference_model = prepare_deepspeed(accelerator, reference_model)
 
@@ -751,14 +849,15 @@ def main():
             with accelerator.accumulate(model):
                 if not args.use_orpo_loss:
                     #policy_chosen_logps, policy_rejected_logps = concatenated_forward(model, batch)
+                    policy_chosen_logps, policy_rejected_logps,policy_nll_loss = concatenated_forward_orpo(model,batch)
                     with torch.no_grad():
-                        policy_chosen_logps, policy_rejected_logps,policy_nll_loss = concatenated_forward_orpo(model,batch)
                         if args.use_lora:
                             with accelerator.unwrap_model(model).disable_adapter():
                                 reference_chosen_logps, reference_rejected_logps = concatenated_forward(model, batch)
                         else:
                             reference_chosen_logps, reference_rejected_logps = concatenated_forward(reference_model, batch)
 
+                    # add regular loss
                     if args.use_reg_dpo_loss:
                         if args.use_sft_reg:
                             # print("use dpo loss with regular")
@@ -768,7 +867,7 @@ def main():
                                 policy_chosen_logps, policy_rejected_logps, reference_chosen_logps, reference_rejected_logps, beta=args.beta)
                             
                             loss = losses.mean() + args.dpo_reg_alpha * policy_nll_loss
-                            # print(f"dpo loss:{losses.mean()}  ======  sft loss: {policy_nll_loss}")
+
                         else:
                             losses, chosen_rewards, rejected_rewards = dpo_loss_w_reg(              # return loss, chosen_rewards, rejected_rewards
                                 policy_chosen_logps, policy_rejected_logps, reference_chosen_logps, reference_rejected_logps, beta=args.beta,alpha=args.dpo_reg_alpha)
@@ -803,9 +902,9 @@ def main():
                 completed_steps += 1
                 if args.logging_steps and completed_steps % args.logging_steps == 0:
                     avg_loss = accelerator.gather(total_loss).mean().item() / args.gradient_accumulation_steps / args.logging_steps
-
-                    avg_chosen_rewards = accelerator.gather(chosen_rewards).mean().item() if accelerator.num_processes > 1 else chosen_rewards.mean().item()
-                    avg_rejected_rewards = accelerator.gather(rejected_rewards).mean().item() if accelerator.num_processes > 1 else rejected_rewards.mean().item()
+                    # add chosen_rewards, rejected_rewards info
+                    avg_chosen_rewards = accelerator.gather(chosen_rewards.detach()).mean().item() if accelerator.num_processes > 1 else chosen_rewards.mean().item()
+                    avg_rejected_rewards = accelerator.gather(rejected_rewards.detach()).mean().item() if accelerator.num_processes > 1 else rejected_rewards.mean().item()
     
                     logger.info(f"  Step: {completed_steps}, LR: {lr_scheduler.get_last_lr()[0]}, Loss: {avg_loss},chosen_rewards: {avg_chosen_rewards},rejected_rewards: {avg_rejected_rewards}")
                     if args.with_tracking:
@@ -813,8 +912,8 @@ def main():
                             {
                                 "learning_rate": lr_scheduler.get_last_lr()[0],
                                 "train_loss": avg_loss,
-                                "chosen_rewards":avg_chosen_rewards,
-                                "rejected_rewards":avg_rejected_rewards,
+                                "rewards/chosen_rewards":avg_chosen_rewards,
+                                "rewards/rejected_rewards":avg_rejected_rewards,
                             },
                             step=completed_steps,
                         )
@@ -835,6 +934,7 @@ def main():
             if args.output_dir is not None:
                 output_dir = os.path.join(args.output_dir, output_dir)
             save_with_accelerate(accelerator, model, tokenizer, output_dir, args)
+    
 
     if args.with_tracking:
         accelerator.end_training()
@@ -845,6 +945,8 @@ def main():
             tokenizer.save_pretrained(args.output_dir)
         save_with_accelerate(accelerator, model, tokenizer, args.output_dir, args)
 
+    if args.neftune_noise_alpha is not None:
+        _deactivate_neftune(model,accelerator,hook_handle)
 
 if __name__ == "__main__":
     main()

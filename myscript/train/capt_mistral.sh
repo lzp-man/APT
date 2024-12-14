@@ -20,7 +20,7 @@ export MASTER_PORT=29801
 accelerate launch \
     --num_machines 1 \
     --num_processes $NUM_GPUS \
-    open_instruct/dpo_tune_capt.py \
+    open_instruct/dpo_tune_apt.py \
     --model_name_or_path $MODEL_PATH \
     --use_lora \
     --use_reg_dpo_loss \

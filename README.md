@@ -2,7 +2,7 @@
 We provide a `requirements.txt` file for installing the required packages. You can install the required packages using the following command:
 ```
 conda create -n your_env python==3.10
-cd open-instruct-capt
+cd open-instruct-apt
 pip install -r requirements.txt
 ```
 
@@ -51,8 +51,8 @@ bash myscript/process/retrieval.sh
 After completing the retrieval step, you have obtained the preference data required for this iteration. You can then start preference training using the following command:
 
 ```bash
-bash myscript/train/capt_llama.sh
-bash myscript/train/capt_mistral.sh
+bash myscript/train/apt_llama.sh
+bash myscript/train/apt_mistral.sh
 ```
 
 # Evaluation
