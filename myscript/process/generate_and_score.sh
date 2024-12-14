@@ -31,10 +31,10 @@ for i in $(seq 1 $split_num); do
         --use_vllm &
 done
 
-# 等待所有后台任务完成
+# wait finish 
 wait
 
-# 并行执行 score.py 脚本
+
 for i in $(seq 1 $split_num); do
     CUDA_VISIBLE_DEVICES=$(($i + $offset)) python preprocess/score.py \
         --part_name part${i} \

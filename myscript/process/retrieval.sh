@@ -8,7 +8,7 @@ create_output_dir() {
     fi
 }
 
-# 执行检索任务
+
 run_retrieval() {
     output_dir=$1
     error_data_file=$2
